@@ -13,7 +13,7 @@
 # _______________________________________________________________________________________ #
 
 
-$sourcefolder = "\\RASPBERRYPI\pi500\torrents\TV"
+$sourcefolder = "\\RASPBERRYPI\pi2k\Sonarr"
 $destinationfolder = "\\RASPBERRYPI\pi2k\media\TV"
 $logfolder = "\\RASPBERRYPI\pi2k\media"
 
@@ -23,10 +23,10 @@ $newfileext = "mp4" # <------ choose mkv or mp4
 $recursive = 1 # <----------- set to 1 to enable recursive source folder scan
 $remold = 0 # <-------------- set to 1 to delete source files after re-encode
 $clrrcl = 0 # <-------------- set to 1 to clear recycle bin after script finishes
-$sonarr = 0 # <------------ set this to 1 if you want sonarr to search for content after conversion then set the relevant fields below.
+$sonarr = 1 # <------------ set this to 1 if you want sonarr to search for content after conversion then set the relevant fields below.
 
 $sonarrURL = "http://raspberrypi.local:8989"
-$sonarrAPI = "YOUR API KEY HERE"
+$sonarrAPI = "3b93d4d21b50429ea4bc8f1416082b54"
 
 $changeaffinity = 0 # <------ if you want to change the affinity of handbrakeCLI set this to 1 and change the decimal values below
 $decimal = 255 # <----------- decimal values available via google or here: https://stackoverflow.com/questions/19187241/change-affinity-of-process-with-windows-script
@@ -51,7 +51,7 @@ Set the below option to "1" and then set the name of the profile you want to use
 #>
 
 $import = 0
-$profile = "Plex1080p265"
+$profile = "Plex1080265"
 
 $hidden = 0 # <-------------- Set this to 1 to hide the handbrake CLI window. If you want to watch it whirring away, keep set to 0
 $notifications = 0 # <------- Set this to 1 to enable Windows 10 Toast Notifications (requires Creators Update to work properly)
@@ -67,6 +67,7 @@ if ($notifications -eq 1) {
     if ((Test-Path "C:\Program Files\WindowsPowerShell\Modules\BurntToast") -eq $false) { Install-Module Burnttoast }
 }
 
+Write-Output "bambam"
 if ($sourcefolder -eq $destinationfolder) { 
     [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
     [Windows.Forms.MessageBox]::Show("Source and destination folders cannot be the same!", "Check File Path Variables", [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error)
@@ -99,6 +100,7 @@ else {
 
 $num = $filelist | measure
 $filecount = $num.count 
+
 Write-Output $filecount
 if ($num.count -eq "0") { 
     remove-item -LiteralPath $lockdest\running.lock -Force
@@ -107,34 +109,27 @@ if ($num.count -eq "0") {
 
 $uid = 000124
 $i = 0;
-
+$inProgressFilelist = @();
 ForEach ($file in $filelist) {
     $i++;
 
     $randomtime = Get-Random -Minimum 1000 -Maximum 4000
     Start-Sleep -m $randomtime
 
-    $progressroot = $sourcefolder + "\" + "In Progress"
-    if ((Test-Path $progressroot) -eq $false) { New-Item $progressroot -type directory }
-
-    $f = 0
-    do {
-        $f++;
-        $progressfolder = $progressroot + "\" + $f
-        (Test-Path $progressfolder)
-    } until ((Test-Path $progressfolder) -eq $false)
-    New-Item $progressfolder -type Directory
+    $progressfolder = $file.DirectoryName + "\" + "InProgress"
+    if ((Test-Path $progressfolder) -eq $false) { New-Item $progressfolder -type directory }
 
     $movefile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
-    
+    $inProgressFilelist += ,$progressfolder + $movefile;
     if ($remold -eq 1) { Move-Item -literalpath $movefile -Destination $progressfolder }
     else { Copy-Item -literalpath $movefile -Destination $progressfolder }
 }
-Write-Output "bam"
+Write-Output "inProgressFilelist"
+Write-Output $inProgressFilelist
 Get-ChildItem $sourcefolder -Recurse | Where-Object -FilterScript { $_.PSIsContainer -eq $True } | Where-Object -FilterScript { ($_.GetFiles().Count -eq 0) -and $_.GetDirectories().Count -eq 0 } | foreach ($_) { remove-item -LiteralPath $_.fullname }
 
-$progressroot = $sourcefolder + "\" + "In Progress"
-$filelist = Get-ChildItem $progressroot -Filter *.* -Recurse | where { ! $_.PSIsContainer }
+$filelist = Get-ChildItem -LiteralPath $inProgressFilelist -Filter *.* -Recurse | where { ! $_.PSIsContainer }
+Write-Output $filelist
 $num = $filelist | measure
 $filecount = $num.count
 
@@ -154,10 +149,11 @@ ForEach ($file in $filelist) {
     New-Item $lockdest\encoding.lock -type file
 
     $oldfile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
-    $newfile = $destinationfolder + "\" + $file.BaseName + ".$newfileext";
+    $newfileFolder = $destinationfolder + $file.DirectoryName.replace($sourcefolder,'').replace('\InProgress','');
+    if ((Test-Path $newfileFolder) -eq $false) { New-Item -path $newfileFolder -type directory }
+
+    $newfile = $newfileFolder + "\" + $file.BaseName + ".$newfileext";
     $oldfilebase = $file.BaseName + $file.Extension;
-    Write-Output $oldfile
-    Write-Output $newfile
     $date = Get-Date    
     $output1 = "-------------------------------------------------------------------------------"
     $output2 = "Handbrake Automated Encoding `r`n"
@@ -230,4 +226,3 @@ Get-ChildItem $sourcefolder -Recurse | Where-Object -FilterScript { $_.PSIsConta
 if ($notifications -eq 1) { New-BurntToastNotification -Header $noth2 -text "Finished Processing $filecount Files" -UniqueIdentifier "$uid" }
 
 if ($clrrcl -eq 1) { Clear-RecycleBin -Confirm:$False }
-Read-Host -Prompt "Press Enter to exit"
