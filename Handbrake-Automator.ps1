@@ -95,10 +95,10 @@ $previous = @(get-content -path $logfolder\previouslycompleted.log)
 $fullExcluded = $excluded + $previous
 
 if ($recursive -eq 1) { 
-    $filelist = Get-ChildItem $sourcefolder -Recurse -Include $included -Exclude $fullExcluded | where { ! $_.PSIsContainer } | Where { $_.FullName -notlike "*\In Progress\*" -and $_.FullName -notlike "*\Delayed\*" } 
+    $filelist = Get-ChildItem $sourcefolder -Recurse -Include $included -Exclude $fullExcluded | where { ! $_.PSIsContainer } | Where { $_.FullName -notlike "*\InProgress\*" -and $_.FullName -notlike "*\Delayed\*" } 
 }
 else { 
-    $filelist = Get-ChildItem $sourcefolder -Include $included -Exclude $fullExcluded | where { ! $_.PSIsContainer } | Where { $_.FullName -notlike "*\In Progress\*" -and $_.FullName -notlike "*\Delayed\*" }
+    $filelist = Get-ChildItem $sourcefolder -Include $included -Exclude $fullExcluded | where { ! $_.PSIsContainer } | Where { $_.FullName -notlike "*\InProgress\*" -and $_.FullName -notlike "*\Delayed\*" }
 }
 
 $num = $filelist | measure
@@ -202,7 +202,7 @@ ForEach ($file in $filelist) {
     $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
     $output6 | Out-File -Append $logfolder\encoded.log
 
-    $oldfilebase | Out-File -Append $logfolder\previouslycompleted.log
+    $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
     
     remove-item -LiteralPath $lockdest\encoding.lock -Force
 }
