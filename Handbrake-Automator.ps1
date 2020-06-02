@@ -13,15 +13,14 @@
 # _______________________________________________________________________________________ #
 
 
-$sourcefolder = "\\RASPBERRYPI\pi2k\Sonarr"
-$destinationfolder = "\\RASPBERRYPI\pi2k\media\TV"
-$logfolder = "\\RASPBERRYPI\pi2k\media"
-
-$lockdest = "\\RASPBERRYPI\pi2k\media" # <----- This is where the .lock files go that allow the script to see if it is already running or encoding
+$sourcefolder = "\\raspberrypi\pi2k\Sonarr"
+$destinationfolder = "\\raspberrypi\pi2k\handbrake\Sonarr"
+$logfolder = "\\raspberrypi\pi2k\handbrake"
+$lockdest = "\\raspberrypi\pi2k\handbrake" # <----- This is where the .lock files go that allow the script to see if it is already running or encoding
 
 $newfileext = "mp4" # <------ choose mkv or mp4 
 $recursive = 1 # <----------- set to 1 to enable recursive source folder scan
-$remold = 0 # <-------------- set to 1 to delete source files after re-encode
+$remold = 1 # <-------------- set to 1 to delete source files after re-encode
 $clrrcl = 0 # <-------------- set to 1 to clear recycle bin after script finishes
 $sonarr = 1 # <------------ set this to 1 if you want sonarr to search for content after conversion then set the relevant fields below.
 
@@ -40,7 +39,7 @@ see handbrake cli documentation here: https://handbrake.fr/docs/en/latest/cli/cl
 
 #>
 
-$handargs = "--preset-import-file \\RASPBERRYPI\pi2k\Plex1080p265.json"
+$handargs = "--preset-import-file \\raspberrypi\pi2k\Plex1080p265.json --preset Plex1080265"
 
 <# 
 
@@ -67,12 +66,16 @@ if ($notifications -eq 1) {
     if ((Test-Path "C:\Program Files\WindowsPowerShell\Modules\BurntToast") -eq $false) { Install-Module Burnttoast }
 }
 
-Write-Output "bambam"
 if ($sourcefolder -eq $destinationfolder) { 
     [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
     [Windows.Forms.MessageBox]::Show("Source and destination folders cannot be the same!", "Check File Path Variables", [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error)
     Exit
 }
+if ((Test-Path "C:\Program Files\HandBrake\HandBrakeCLI.exe") -eq $false) { 
+    Write-Output "install HandBrakeCLI C:\Program Files\HandBrake\HandBrakeCLI.exe"
+    Exit
+}
+
 
 if ((Test-Path $lockdest\running.lock) -eq $false) { New-Item $lockdest\running.lock -type file } else { exit }
 
@@ -120,7 +123,7 @@ ForEach ($file in $filelist) {
     if ((Test-Path $progressfolder) -eq $false) { New-Item $progressfolder -type directory }
 
     $movefile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
-    $inProgressFilelist += ,$progressfolder + $movefile;
+    if ($inProgressFilelist -notcontains $progressfolder) {$inProgressFilelist += ,$progressfolder}
     if ($remold -eq 1) { Move-Item -literalpath $movefile -Destination $progressfolder }
     else { Copy-Item -literalpath $movefile -Destination $progressfolder }
 }
@@ -129,7 +132,6 @@ Write-Output $inProgressFilelist
 Get-ChildItem $sourcefolder -Recurse | Where-Object -FilterScript { $_.PSIsContainer -eq $True } | Where-Object -FilterScript { ($_.GetFiles().Count -eq 0) -and $_.GetDirectories().Count -eq 0 } | foreach ($_) { remove-item -LiteralPath $_.fullname }
 
 $filelist = Get-ChildItem -LiteralPath $inProgressFilelist -Filter *.* -Recurse | where { ! $_.PSIsContainer }
-Write-Output $filelist
 $num = $filelist | measure
 $filecount = $num.count
 
@@ -213,8 +215,9 @@ if ($sonarr -eq 1) {
         $json1 = "{ ""name"": ""downloadedepisodesscan"",""path"": """
         $json2 = """}"
         $encoded = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
-        $escaped = $encoded.replace('\', '\\')
-        $jsoncomplete = $json1 + $escaped + $json2
+        $encoded = $encoded.replace("\\raspberrypi",'/mnt')
+        $encoded = $encoded.replace("\",'/')
+        $jsoncomplete = $json1 + $encoded + $json2
         Invoke-RestMethod -Uri $url -Method Post -Body $jsoncomplete -Headers @{"X-Api-Key" = "$sonarrAPI" }
     }
 }
