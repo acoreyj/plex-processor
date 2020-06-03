@@ -13,14 +13,14 @@
 # _______________________________________________________________________________________ #
 
 
-$sourcefolder = "\\raspberrypi\pi2k\Sonarr"
+$sourcefolder = "\\raspberrypi\pi2k\downloading\tv-sonarr"
 $destinationfolder = "\\raspberrypi\pi2k\handbrake\Sonarr"
 $logfolder = "\\raspberrypi\pi2k\handbrake"
 $lockdest = "\\raspberrypi\pi2k\handbrake" # <----- This is where the .lock files go that allow the script to see if it is already running or encoding
 
 $newfileext = "mp4" # <------ choose mkv or mp4 
 $recursive = 1 # <----------- set to 1 to enable recursive source folder scan
-$remold = 1 # <-------------- set to 1 to delete source files after re-encode
+$remold = 0 # <-------------- set to 1 to delete source files after re-encode
 $clrrcl = 0 # <-------------- set to 1 to clear recycle bin after script finishes
 $sonarr = 1 # <------------ set this to 1 if you want sonarr to search for content after conversion then set the relevant fields below.
 
@@ -166,14 +166,14 @@ ForEach ($file in $filelist) {
     Write-Output $handargs
     Write-Output $oldfile
     Write-Output $newfile
-
+    $stderr = $logfolder + "\" +  $oldfilebase + ".log"
     if ($hidden -eq "1") {
-        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -WindowStyle Hidden -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" }
-        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -WindowStyle Hidden -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" }
+        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -WindowStyle Hidden -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
+        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -WindowStyle Hidden -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
     }
     else {
-        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" }
-        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" }
+        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
+        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
     }
     
     Start-Sleep -s 1
@@ -193,16 +193,28 @@ ForEach ($file in $filelist) {
     }
     
     do { Start-Sleep -s 1 } until ((get-process HandBrakeCLI -ea SilentlyContinue) -eq $Null)
-    
     $date = Get-Date
-    $output5 = "$date `| Finished:      `| $newfile"
-    $output5 | Out-File -Append $logfolder\encoded.log
-    
-    Remove-Item -LiteralPath "$oldfile" -force
-    $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
-    $output6 | Out-File -Append $logfolder\encoded.log
 
-    $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+    if (Select-String -Path $stderr -Pattern "Encode Done!" -SimpleMatch -Quiet)
+    {
+        $output5 = "$date `| Failed:      `| $newfile"
+        $output5 | Out-File -Append $logfolder\encoded.log
+        
+        $output6 = "                    `| Left File:  `| $oldfile `r`n"
+        $output6 | Out-File -Append $logfolder\encoded.log
+    }
+    else
+    {
+        $date = Get-Date
+        $output5 = "$date `| Finished:      `| $newfile"
+        $output5 | Out-File -Append $logfolder\encoded.log
+        
+        Remove-Item -LiteralPath "$oldfile" -force
+        $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
+        $output6 | Out-File -Append $logfolder\encoded.log
+    
+        $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+    }
     
     remove-item -LiteralPath $lockdest\encoding.lock -Force
 }
