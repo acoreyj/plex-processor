@@ -20,7 +20,7 @@ $lockdest = "\\raspberrypi\pi2k\handbrake" # <----- This is where the .lock file
 
 $newfileext = "mp4" # <------ choose mkv or mp4 
 $recursive = 1 # <----------- set to 1 to enable recursive source folder scan
-$remold = 0 # <-------------- set to 1 to delete source files after re-encode
+$remold = 1 # <-------------- set to 1 to delete source files after re-encode
 $clrrcl = 0 # <-------------- set to 1 to clear recycle bin after script finishes
 $sonarr = 1 # <------------ set this to 1 if you want sonarr to search for content after conversion then set the relevant fields below.
 
@@ -152,7 +152,7 @@ ForEach ($file in $filelist) {
 
     $oldfile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
     $newfileFolder = $destinationfolder + $file.DirectoryName.replace($sourcefolder,'').replace('\InProgress','');
-    if ((Test-Path $newfileFolder) -eq $false) { New-Item -path $newfileFolder -type directory }
+    if ((Test-Path -LiteralPath $newfileFolder) -eq $false) { New-Item -path $newfileFolder -type directory }
 
     $newfile = $newfileFolder + "\" + $file.BaseName + ".$newfileext";
     $oldfilebase = $file.BaseName + $file.Extension;
@@ -167,56 +167,70 @@ ForEach ($file in $filelist) {
     Write-Output $oldfile
     Write-Output $newfile
     $stderr = $logfolder + "\" +  $oldfilebase + ".log"
-    if ($hidden -eq "1") {
-        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -WindowStyle Hidden -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
-        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -WindowStyle Hidden -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
-    }
-    else {
-        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
-        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
-    }
-    
-    Start-Sleep -s 1
 
-    if ($notifications -eq 1) {
-        $count = "$i" + "/" + "$filecount"
-        $dec = $i / ($filecount + 1)
-        $perc = "{0:p0}" -f $dec
-        $bar = New-BTProgressBar -Status "Encoding episode $count" -Indeterminate -ValueDisplay $perc
-        if ($filecount -eq 1) { New-BurntToastNotification -Header $noth1 -Text "Found $filecount New Thing", "I’m processing it now" -ProgressBar $bar -UniqueIdentifier "$uid" -AppLogo P:\Downloads\Shows\Scripts\icon2.png }
-        else { New-BurntToastNotification -Header $noth1 -Text "Found $filecount New Things", "I’m processing them now" -ProgressBar $bar -UniqueIdentifier "$uid" -AppLogo P:\Downloads\Shows\Scripts\icon2.png }
-    }
-
-    if ($changeaffinity -eq 1) {
-        $affinity = Get-Process HandBrakeCLI
-        $affinity.ProcessorAffinity = $decimal 
-    }
-    
-    do { Start-Sleep -s 1 } until ((get-process HandBrakeCLI -ea SilentlyContinue) -eq $Null)
+    $videoFormat = & 'C:\Program Files (x86)\MediaInfo\MediaInfo.exe' $oldfile --Inform="Video;%Format% ";
+    Write-Output $videoFormat
     $date = Get-Date
 
-    if (Select-String -Path $stderr -Pattern "Encode Done!" -SimpleMatch -Quiet)
-    {
-        $output5 = "$date `| Failed:      `| $newfile"
-        $output5 | Out-File -Append $logfolder\encoded.log
+    $audioFormat;
+    if ($videoFormat -like "*HEVC*" -Or $videoFormat -like "*AVC*") {
+        $audioFormat = & 'C:\Program Files (x86)\MediaInfo\MediaInfo.exe' $oldfile --Inform="Audio;%Format% ";
+        Write-Output $audioFormat;
+
+        if ($audioFormat -like "*AC-3*" -Or $videoFormat -like "*AAC*") {
+            Move-Item -literalpath $oldfile -Destination $newfile
+            $output5 = "$date `| Finished: supported video/audio      `| $newfile"
+            $output5 | Out-File -Append $logfolder\encoded.log
         
-        $output6 = "                    `| Left File:  `| $oldfile `r`n"
-        $output6 | Out-File -Append $logfolder\encoded.log
-    }
-    else
-    {
-        $date = Get-Date
-        $output5 = "$date `| Finished:      `| $newfile"
-        $output5 | Out-File -Append $logfolder\encoded.log
+            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+        } else {
+            & 'C:\Program Files (x86)\MediaInfo\ffmpeg.exe' -i $oldfile -acodec aac -vcodec copy $newfile
+            $output5 = "$date `| Finished: supported video      `| $newfile"
+            $output5 | Out-File -Append $logfolder\encoded.log
+            Remove-Item -LiteralPath "$oldfile" -force
+            $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
+            $output6 | Out-File -Append $logfolder\encoded.log
+            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+        }
+        remove-item -LiteralPath $lockdest\encoding.lock -Force
+
+    } else {
+        if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
+        else { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "--preset-import-gui --preset $profile -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
+
+        Start-Sleep -s 1
+
+        if ($changeaffinity -eq 1) {
+            $affinity = Get-Process HandBrakeCLI
+            $affinity.ProcessorAffinity = $decimal 
+        }
         
-        Remove-Item -LiteralPath "$oldfile" -force
-        $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
-        $output6 | Out-File -Append $logfolder\encoded.log
+        do { Start-Sleep -s 1 } until ((get-process HandBrakeCLI -ea SilentlyContinue) -eq $Null)
     
-        $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+        if (Select-String -Path $stderr -Pattern "Encode done!" -SimpleMatch -Quiet)
+        {
+            $output5 = "$date `| Failed:      `| $newfile"
+            $output5 | Out-File -Append $logfolder\encoded.log
+            
+            $output6 = "                    `| Left File:  `| $oldfile `r`n"
+            $output6 | Out-File -Append $logfolder\encoded.log
+        }
+        else
+        {
+            $output5 = "$date `| Finished:      `| $newfile"
+            $output5 | Out-File -Append $logfolder\encoded.log
+            
+            Remove-Item -LiteralPath "$oldfile" -force
+            $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
+            $output6 | Out-File -Append $logfolder\encoded.log
+        
+            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+        }
+        
+        remove-item -LiteralPath $lockdest\encoding.lock -Force
     }
     
-    remove-item -LiteralPath $lockdest\encoding.lock -Force
+   
 }
 
 if ($sonarr -eq 1) {
