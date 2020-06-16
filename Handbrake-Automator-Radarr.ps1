@@ -13,8 +13,8 @@
 # _______________________________________________________________________________________ #
 
 
-$sourcefolder = "\\raspberrypi\pi2k\downloading\tv-sonarr"
-$destinationfolder = "\\raspberrypi\pi2k\handbrake\Sonarr"
+$sourcefolder = "\\raspberrypi\pi2k\downloading\radarr"
+$destinationfolder = "\\raspberrypi\pi2k\handbrake\Radarr"
 $logfolder = "\\raspberrypi\pi2k\handbrake"
 $lockdest = "\\raspberrypi\pi2k\handbrake" # <----- This is where the .lock files go that allow the script to see if it is already running or encoding
 
@@ -22,10 +22,10 @@ $newfileext = "mp4" # <------ choose mkv or mp4
 $recursive = 1 # <----------- set to 1 to enable recursive source folder scan
 $remold = 1 # <-------------- set to 1 to delete source files after re-encode
 $clrrcl = 0 # <-------------- set to 1 to clear recycle bin after script finishes
-$sonarr = 1 # <------------ set this to 1 if you want sonarr to search for content after conversion then set the relevant fields below.
+$radarr = 1 # <------------ set this to 1 if you want radarr to search for content after conversion then set the relevant fields below.
 
-$sonarrURL = "http://raspberrypi.local:8989"
-$sonarrAPI = "3b93d4d21b50429ea4bc8f1416082b54"
+$radarrURL = "http://raspberrypi.local:7878"
+$radarrAPI = "d55ec538deae4c6c9de4760d03d0672f"
 
 $changeaffinity = 0 # <------ if you want to change the affinity of handbrakeCLI set this to 1 and change the decimal values below
 $decimal = 255 # <----------- decimal values available via google or here: https://stackoverflow.com/questions/19187241/change-affinity-of-process-with-windows-script
@@ -55,18 +55,18 @@ $profile = "Plex1080265"
 $hidden = 0 # <-------------- Set this to 1 to hide the handbrake CLI window. If you want to watch it whirring away, keep set to 0
 $notifications = 0 # <------- Set this to 1 to enable Windows 10 Toast Notifications (requires Creators Update to work properly)
 
-if ($sonarr -eq 1) {
+if ($radarr -eq 1) {
 
     $filelist2 = Get-ChildItem $destinationfolder -Filter *.* -Recurse | where { ! $_.PSIsContainer }
     ForEach ($file in $filelist2) {
-        $url = "$sonarrURL/api/command"
-        $json1 = "{ ""name"": ""downloadedepisodesscan"",""path"": """
+        $url = "$radarrURL/api/command"
+        $json1 = "{ ""name"": ""DownloadedMoviesScan"",""path"": """
         $json2 = """}"
         $encoded = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
         $encoded = $encoded.replace("\\raspberrypi",'/mnt')
         $encoded = $encoded.replace("\",'/')
         $jsoncomplete = $json1 + $encoded + $json2
-        Invoke-RestMethod -Uri $url -Method Post -Body $jsoncomplete -Headers @{"X-Api-Key" = "$sonarrAPI" }
+        Invoke-RestMethod -Uri $url -Method Post -Body $jsoncomplete -Headers @{"X-Api-Key" = "$radarrAPI" }
     }
 }
 
@@ -90,10 +90,10 @@ if ((Test-Path "C:\Program Files\HandBrake\HandBrakeCLI.exe") -eq $false) {
 }
 
 
-if ((Test-Path $lockdest\running.lock) -eq $false) { New-Item $lockdest\running.lock -type file } else { exit }
+if ((Test-Path $lockdest\running-radarr.lock) -eq $false) { New-Item $lockdest\running-radarr.lock -type file } else { exit }
 
 if ($remold -eq 1) {
-    $excluded = @("*.mp4", "*.mkv", "*.avi", "*.mpeg4", "*.ts", "*.!ut", "encoding.log")
+    $excluded = @("*.mp4", "*.mkv", "*.avi", "*.mpeg4", "*.ts", "*.!ut", "encoding-radarr.log")
     Get-ChildItem $sourcefolder\* -Exclude $excluded -Recurse | where { ! $_.PSIsContainer } | foreach ($_) { Remove-Item -LiteralPath $_.FullName -Force }
     Get-ChildItem $sourcefolder -Filter "RARBG.mp4" -Recurse | foreach ($_) { Remove-Item -LiteralPath $_.FullName -Force }
 }
@@ -102,8 +102,8 @@ $included = @("*.mp4", "*.mkv", "*.avi", "*.mpeg4", "*.ts")
 
 
 $excluded = @("RARBG.mp4", "*sample*")
-if ((Test-Path $logfolder\previouslycompleted.log) -eq $false) { New-Item $logfolder\previouslycompleted.log -type file }
-$previous = @(get-content -path $logfolder\previouslycompleted.log)
+if ((Test-Path $logfolder\previouslycompleted-radarr.log) -eq $false) { New-Item $logfolder\previouslycompleted-radarr.log -type file }
+$previous = @(get-content -path $logfolder\previouslycompleted-radarr.log)
 
 $fullExcluded = $excluded + $previous
 
@@ -119,7 +119,7 @@ $filecount = $num.count
 
 Write-Output $filecount
 if ($num.count -eq "0") { 
-    remove-item -LiteralPath $lockdest\running.lock -Force
+    remove-item -LiteralPath $lockdest\running-radarr.lock -Force
     Exit 
 }
 
@@ -159,9 +159,9 @@ ForEach ($file in $filelist) {
         $randomtime = Get-Random -Minimum 10 -Maximum 2000
         Start-Sleep -m $randomtime 
     } 
-    until ((Test-Path $lockdest\encoding.lock) -eq $false)
+    until ((Test-Path $lockdest\encoding-radarr.lock) -eq $false)
 
-    New-Item $lockdest\encoding.lock -type file
+    New-Item $lockdest\encoding-radarr.lock -type file
 
     $oldfile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
     $newfileFolder = $destinationfolder + $file.DirectoryName.replace($sourcefolder,'').replace('\InProgress','');
@@ -195,7 +195,7 @@ ForEach ($file in $filelist) {
             $output5 = "$date `| Finished: supported video/audio      `| $newfile"
             $output5 | Out-File -Append $logfolder\encoded.log
         
-            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted-radarr.log
         } else {
             & 'C:\Program Files (x86)\MediaInfo\ffmpeg.exe' -y -i $oldfile -map 0:v -c:v copy -map 0:a -c:a:0 copy -map 0:a -strict -2 -c:a:1 aac $newfile
             $output5 = "$date `| Finished: supported video      `| $newfile"
@@ -203,9 +203,9 @@ ForEach ($file in $filelist) {
             Remove-Item -LiteralPath "$oldfile" -force
             $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
             $output6 | Out-File -Append $logfolder\encoded.log
-            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted-radarr.log
         }
-        remove-item -LiteralPath $lockdest\encoding.lock -Force
+        remove-item -LiteralPath $lockdest\encoding-radarr.lock -Force
 
     } else {
         if ($import -eq 0) { Start-Process "C:\Program Files\HandBrake\HandBrakeCLI.exe" -ArgumentList "$handargs -i `"$oldfile`" -o `"$newfile`"" -RedirectStandardError $stderr}
@@ -237,31 +237,31 @@ ForEach ($file in $filelist) {
             $output6 = "                    `| Deleted File:  `| $oldfile `r`n"
             $output6 | Out-File -Append $logfolder\encoded.log
         
-            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted.log
+            $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted-radarr.log
         }
         
-        remove-item -LiteralPath $lockdest\encoding.lock -Force
+        remove-item -LiteralPath $lockdest\encoding-radarr.lock -Force
     }
     
    
 }
 
-if ($sonarr -eq 1) {
+if ($radarr -eq 1) {
 
     $filelist2 = Get-ChildItem $destinationfolder -Filter *.* -Recurse | where { ! $_.PSIsContainer }
     ForEach ($file in $filelist2) {
-        $url = "$sonarrURL/api/command"
-        $json1 = "{ ""name"": ""downloadedepisodesscan"",""path"": """
+        $url = "$radarrURL/api/command"
+        $json1 = "{ ""name"": ""DownloadedMoviesScan"",""path"": """
         $json2 = """}"
         $encoded = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
         $encoded = $encoded.replace("\\raspberrypi",'/mnt')
         $encoded = $encoded.replace("\",'/')
         $jsoncomplete = $json1 + $encoded + $json2
-        Invoke-RestMethod -Uri $url -Method Post -Body $jsoncomplete -Headers @{"X-Api-Key" = "$sonarrAPI" }
+        Invoke-RestMethod -Uri $url -Method Post -Body $jsoncomplete -Headers @{"X-Api-Key" = "$radarrAPI" }
     }
 }
 
-remove-item -LiteralPath $lockdest\running.lock -Force
+remove-item -LiteralPath $lockdest\running-radarr.lock -Force
 Get-ChildItem $sourcefolder -Recurse | Where-Object -FilterScript { $_.PSIsContainer -eq $True } | Where-Object -FilterScript { ($_.GetFiles().Count -eq 0) -and $_.GetDirectories().Count -eq 0 } | foreach ($_) { remove-item $_.fullname }
 Get-ChildItem $sourcefolder -Recurse | Where-Object -FilterScript { $_.PSIsContainer -eq $True } | Where-Object -FilterScript { ($_.GetFiles().Count -eq 0) -and $_.GetDirectories().Count -eq 0 } | foreach ($_) { remove-item $_.fullname }
 
