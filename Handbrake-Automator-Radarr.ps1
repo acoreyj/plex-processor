@@ -13,10 +13,10 @@
 # _______________________________________________________________________________________ #
 
 
-$sourcefolder = "\\raspberrypi\pi2k\downloading\radarr"
-$destinationfolder = "\\raspberrypi\pi2k\handbrake\Radarr"
-$logfolder = "\\raspberrypi\pi2k\handbrake"
-$lockdest = "\\raspberrypi\pi2k\handbrake" # <----- This is where the .lock files go that allow the script to see if it is already running or encoding
+$sourcefolder = "\\raspberrypi\piStorage\downloading\radarr"
+$destinationfolder = "\\raspberrypi\piStorage\handbrake\Radarr"
+$logfolder = "\\raspberrypi\piStorage\handbrake"
+$lockdest = "\\raspberrypi\piStorage\handbrake" # <----- This is where the .lock files go that allow the script to see if it is already running or encoding
 
 $newfileext = "mp4" # <------ choose mkv or mp4 
 $recursive = 1 # <----------- set to 1 to enable recursive source folder scan
@@ -39,7 +39,7 @@ see handbrake cli documentation here: https://handbrake.fr/docs/en/latest/cli/cl
 
 #>
 
-$handargs = "--preset-import-file \\raspberrypi\pi2k\Plex1080p265.json --preset Plex1080265"
+$handargs = "--preset-import-file \\raspberrypi\piStorage\Plex1080p265.json --preset Plex1080265"
 
 <# 
 
@@ -181,13 +181,13 @@ ForEach ($file in $filelist) {
     Write-Output $newfile
     $stderr = $logfolder + "\" +  $oldfilebase + ".log"
 
-    $videoFormat = & 'C:\Program Files (x86)\MediaInfo\MediaInfo.exe' $oldfile --Inform="Video;%Format% ";
+    $videoFormat = & 'C:\Program Files\MediaInfo\CLI\MediaInfo.exe' $oldfile --Inform="Video;%Format% ";
     Write-Output $videoFormat
     $date = Get-Date
 
     $audioFormat;
     if ($videoFormat -like "*HEVC*" -Or $videoFormat -like "*AVC*") {
-        $audioFormat = & 'C:\Program Files (x86)\MediaInfo\MediaInfo.exe' $oldfile --Inform="Audio;%Format% ";
+        $audioFormat = & 'C:\Program Files\MediaInfo\CLI\MediaInfo.exe' $oldfile --Inform="Audio;%Format% ";
         Write-Output $audioFormat;
 
         if ($audioFormat -like "*AAC*") {
@@ -197,7 +197,7 @@ ForEach ($file in $filelist) {
         
             $file.BaseName + "*" | Out-File -Append $logfolder\previouslycompleted-radarr.log
         } else {
-            & 'C:\Program Files (x86)\MediaInfo\ffmpeg.exe' -y -i $oldfile -map 0:v -c:v copy -map 0:a -c:a:0 copy -map 0:a -strict -2 -c:a:1 aac $newfile
+            & 'C:\Program Files\MediaInfo\ffmpeg.exe' -y -i $oldfile -map 0:v -c:v copy -map 0:a -c:a:0 copy -map 0:a -strict -2 -c:a:1 aac $newfile
             $output5 = "$date `| Finished: supported video      `| $newfile"
             $output5 | Out-File -Append $logfolder\encoded.log
             Remove-Item -LiteralPath "$oldfile" -force
